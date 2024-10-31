@@ -1,0 +1,71 @@
+Extra ifno gathered:
+This post helped me get started down this path, so I'll add what I've found.
+
+Bottom line: Setting the speedo scale and tach scale is possible.
+
+I cross posted this to NASOIC.
+
+Setting speedometer scale is relevant if you've, say, bought a JDM 180kph cluster and want it to read in mph without using a converter chip. Or you get a custom print for your cluster and want to make your own 200mph cluster or whatever. Or if, like me, your Impreza is lifted with larger tires and the speedo is slow by like 7% (my exact situation which led to all this).
+
+Setting tach scale is useful if you've swapped a H6 in, or you don't want to pay enormous prices for a 10k/260kph V7 Spec C RA unit because you can simply print your own faces.
+
+This applies to the 93C56 EEPROM in GD/GG non-STI clusters, so basically anything that came in a USDM 02-07 Impreza or WRX (or 01-06 JDM/EUDM), but not the STI with stepper motor (Defi style) gauges. So for JDM clusters, V7 STI yes, V8 no. Side note - I have an 05 STI and that cluster is a pretty different animal. The EEPROM in them is a L56R instead of a 93C56...same basic chip but the L56R is SOIC and the 93C56 is DIP, which makes it more of a pain.
+
+Back to the task at hand. The GD/GG cluster has a 93C56 EEPROM. Note that in some other make/model of cars you can short the crystal and read directly on the board, but not on Subaru, or at least not for me. So I de-soldered a bunch of 93C56 EEPROM chips and read them using XGPro. I haven't figured all of it out yet, but I'll dump one and explain what's relevant to the defined scope (mileage, temp, speedo and tach scale).
+
+Even though 93C56's are 16 bit chips, I display as 8 bit because it's easier for me to look at on my editor. YMMV depending on your reader, bytes may be swapped...meaning '00F5' might show as 'F500', so pay attention to your editor. I know Ponyprog reads different than XGPro but as long as you can read/write the EEPROM you should be able to figure it out.
+
+So here's a dump from a Blobeye EUDM (UK specifically) WRX cluster with a 140mph right speedo, a 8k center tach and 276224 miles.
+
+Line 00: FFFFFFFF5B025B025B020E110E11AA00 Some sort of cluster ID
+Line 10: C00AA00331A0A05886A5B341022EA63 Speedo and tach scale
+Line 20: 0A145550081000005354AAFA55F5F000 Speedo / tach orientation
+Line 30: 000000000000FFFF6B016A039F019E01 Vin?
+Line 40: 02020003630261010604020136063000 Vin?
+Line 50: 19071E032D08250160086801EF0FE002 Vin?
+Line 60: 6E4391BC6E4391BC6E4391BC6E4391BC Odo
+Line 70: 6E4391BC6E4391BC6E4391BC6E4396BC Odo
+Line 80: 559955995599FFFFFFFFFFFFFFFFFFFF Temp
+Lines 90-F0 are all FFFF
+
+If you display in 16 bit, these lines will correspond to 00/08/10/18 etc.
+
+Let's go by line.
+Line 00 is a cluster identifier of sorts albeit it doesn't seem to have much impact. The format is nearly all the same in every cluster I tested and looks like the above:
+FFFFFFFF5B025B025B020E110E11AA00
+Possible letters I've seen are 58, 5A, 5B, 5C, 5D, and 60. There is no correlation by speedo, tach, auto/manual, USDM/JDM/EUDM.
+
+Line 10 is the Speedo and Tach settings.
+C00AA00331A0A05886A5B341022EA63
+
+The seventh byte, "0A" is the speedometer scale. Converted to decimal 0A=10. If you want to correct the speedometer, you need to change this number. For my case, mine now reads hex 10, which is decimal 16. For the frequency that gives 100mph (~110Hz), my cluster will now read 107mph (and 70mph will read 75mph).
+0C00AA00331A0A05886A5B341022EA63 became 0C00AA00331A1005886A5B341022EA63.
+
+The eleventh byte '5B' in line 10 refers to the tach scale. An 8k tach will have a '5B', or 91 in decimal, a 9k tach will have a '52', or 82 in decimal. If you've 6 cylinder swapped, your tach will read low, 2/3 of actual (if my math is right), so 2k is actually 3k, or 1.5x. On a 9k tach, default is 82 in decimal, 82*1.5=123 which is 7B in hex. You can do the same sort of math for an 8k tach or any other. Similarly, you can go the other way, like I'm doing on my Legacy with a 6 cylinder black face gauge for the EJ257 I have in there. Note that the Lego EEPROM is different and I'm still working on it.
+
+Line 20 is relatively not useful
+0A145550081000005354AAFA55F5F000
+The only relevant section is the first byte, '0A', which denotes center tach, right speedo. If you change it to '0C', you get center speedo, right tach, but it also messes up your mileage LCD so is relatively pointless. There are other difference between USDM/EUDM/JDM clusters, but none correlate to anything I can tell. The 2nd-4th bytes and 10th byte are correllated and vary between 005500...10, 145550...54, 003300...09, and 14334B...56. The 5th to 7th bytes seem to correlate to kph clusters. MPH clusters, like my example, read 081000 while kph clusters read F40902. But the ODO fundamentally doesn't care if it's in mph or kph or bph (bananas per hour) because the calculation of 'bananas' or any other unit is independent of that unit. Meaning 60mph*1hr = 60 miles. Or 60bph*1hr=60 bananas. The 8th byte is always 00. The 9th byte seems to be a region byte where 51=USDM, 53=UKDM, AB=EUDM, and CD=JDM. The 10th byte is correlated to the 2nd-4th byte. The 11th-16th byte (the last 6 bytes) (AAFA55F5F000) are identical in all clusters.
+
+Lines 30-50 appear to be the VIN or other specific set of numbers. They differ in every cluster and have no pattern that I can see.
+
+Lines 60 and 70 are the Odometer and are covered previously in this thread.
+
+Line 80 is the temperature units, also covered previously in this thread.
+If the line reads "559955995599FFFFFFFFFFFFFFFFFFFF" it will display in Fahrenheit.
+If the line reads "553355335533FFFFFFFFFFFFFFFFFFFF" it will display in Celsius.
+
+If you want to undertake this kind of foolishness and admitted OCD, you'll need to be able to de-solder the EEPROM from the board, read it in an EEPROM reader (I use a TL-866II-Plus with XGPro) and re-solder it to the board. It helps having a power supply (both 12V and 5V), a pulse generator so you can check your work, and a scope to ensure you're giving it what you think you are.
+
+For reference, I used the following clusters:
+120mph 8k man (tach right / miles) USDM 02/03 Impreza Outback Bugeye
+120mph 8k auto (tach right / miles) USDM 02/03 Impreza Outback Bugeye
+140mph 9k man (tach right / miles) USDM 02/03 Impreza WRX Bugeye
+160mph 9k man (tach right / miles) EUDM(UK) 02/03 WRX Bugeye
+160mph 9k man (tach center / miles) EUDM(UK) 05-07 WRX Hawkeye
+140mph 8k man (tach center / miles) EUDM(UK) 03-04? WRX Blobeye (not sure of the years in the UK)
+180kph 9k man (tach center / km) JDM V7 WRX Bugeye
+180kph 9k man dccd (tach center / km) JDM V7 STI Bugeye
+260kph 9k man (tach center / km) JDM V7 WRX Bugeye
+
+I may edit this as I figure out more. I still plan to mess with the DCCD and Auto cluster to see if I can turn an Auto cluster into a DCCD one. That sure would make DCCD clusters way easier to get....
